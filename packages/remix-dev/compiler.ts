@@ -1,4 +1,4 @@
-import { promises as fsp } from "fs";
+import * as fse from "fs-extra";
 import * as path from "path";
 import { builtinModules as nodeBuiltins } from "module";
 import * as esbuild from "esbuild";
@@ -16,6 +16,7 @@ import { loaders, getLoaderForFile } from "./compiler/loaders";
 import { mdxPlugin } from "./compiler/plugins/mdx";
 import { getRouteModuleExportsCached } from "./compiler/routes";
 import { writeFileSafe } from "./compiler/utils/fs";
+import { cssModulesServerPlugin } from "./compiler/plugins/css-modules";
 
 // When we build Remix, this shim file is copied directly into the output
 // directory in the same place relative to this file. It is eventually injected
@@ -326,7 +327,8 @@ async function createBrowserBuild(
     },
     plugins: [
       mdxPlugin(config),
-      bareCssPlugin(config, /^(?!.*\.module\.css$).*\.css$/),
+      // bareCssPlugin(config, /^(?!.*\.module\.css$).*\.css$/),
+      // cssModulesPlugin(config, /\.module\.css?$/),
       browserRouteModulesPlugin(config, /\?browser$/),
       emptyModulesPlugin(config, /\.server(\.[jt]sx?)?$/)
     ]
@@ -366,6 +368,7 @@ async function createServerBuild(
       "process.env.NODE_ENV": JSON.stringify(options.mode)
     },
     plugins: [
+      cssModulesServerPlugin(config, /\.module\.css?$/),
       mdxPlugin(config),
       serverRouteModulesPlugin(config),
       emptyModulesPlugin(config, /\.client(\.[jt]sx?)?$/),
@@ -497,40 +500,6 @@ const browserSafeRouteExports: { [name: string]: boolean } = {
   unstable_shouldReload: true
 };
 
-function bareCssPlugin(
-  config: RemixConfig,
-  suffixMatcher: RegExp
-): esbuild.Plugin {
-  return {
-    name: "bare-css-imports",
-    async setup(build) {
-      build.onResolve({ filter: suffixMatcher }, args => {
-        return {
-          path: args.path.startsWith("~/")
-            ? path.resolve(config.appDirectory, args.path.replace(/^~\//, ""))
-            : path.resolve(args.resolveDir, args.path),
-          namespace: "bare-css-import"
-        };
-      });
-
-      build.onLoad({ filter: suffixMatcher }, async args => {
-        try {
-          let contents = await fsp.readFile(args.path, "utf-8");
-          return {
-            contents,
-            resolveDir: path.dirname(args.path),
-            loader: getLoaderForFile(args.path)
-          };
-        } catch (err: any) {
-          return {
-            errors: [{ text: err.message }]
-          };
-        }
-      });
-    }
-  };
-}
-
 /**
  * This plugin loads route modules for the browser build, using module shims
  * that re-export only the route module exports that are safe for the browser.
@@ -648,7 +617,7 @@ function serverRouteModulesPlugin(config: RemixConfig): esbuild.Plugin {
 
       build.onLoad({ filter: /.*/, namespace: "route-module" }, async args => {
         let file = args.path;
-        let contents = await fsp.readFile(file, "utf-8");
+        let contents = await fse.readFile(file, "utf-8");
 
         // Default to `export {}` if the file is empty so esbuild interprets
         // this file as ESM instead of CommonJS with `default: {}`. This helps
