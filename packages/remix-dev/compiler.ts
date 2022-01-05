@@ -326,6 +326,7 @@ async function createBrowserBuild(
     },
     plugins: [
       mdxPlugin(config),
+      bareCssPlugin(config, /^(?!.*\.module\.css$).*\.css$/),
       browserRouteModulesPlugin(config, /\?browser$/),
       emptyModulesPlugin(config, /\.server(\.[jt]sx?)?$/)
     ]
@@ -495,6 +496,40 @@ const browserSafeRouteExports: { [name: string]: boolean } = {
   meta: true,
   unstable_shouldReload: true
 };
+
+function bareCssPlugin(
+  config: RemixConfig,
+  suffixMatcher: RegExp
+): esbuild.Plugin {
+  return {
+    name: "bare-css-imports",
+    async setup(build) {
+      build.onResolve({ filter: suffixMatcher }, args => {
+        return {
+          path: args.path.startsWith("~/")
+            ? path.resolve(config.appDirectory, args.path.replace(/^~\//, ""))
+            : path.resolve(args.resolveDir, args.path),
+          namespace: "bare-css-import"
+        };
+      });
+
+      build.onLoad({ filter: suffixMatcher }, async args => {
+        try {
+          let contents = await fsp.readFile(args.path, "utf-8");
+          return {
+            contents,
+            resolveDir: path.dirname(args.path),
+            loader: getLoaderForFile(args.path)
+          };
+        } catch (err: any) {
+          return {
+            errors: [{ text: err.message }]
+          };
+        }
+      });
+    }
+  };
+}
 
 /**
  * This plugin loads route modules for the browser build, using module shims
