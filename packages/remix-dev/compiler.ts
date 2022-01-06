@@ -358,8 +358,6 @@ async function createBrowserBuild(
     plugins: [
       cssModulesClientPlugin(config, handleProcessedCss),
       mdxPlugin(config),
-      // bareCssPlugin(config, /^(?!.*\.module\.css$).*\.css$/),
-      // cssModulesPlugin(config, /\.module\.css?$/),
       browserRouteModulesPlugin(config, /\?browser$/),
       emptyModulesPlugin(config, /\.server(\.[jt]sx?)?$/)
     ]
