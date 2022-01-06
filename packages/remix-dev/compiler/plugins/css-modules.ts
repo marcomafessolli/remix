@@ -30,7 +30,7 @@ export function cssModulesServerPlugin(config: RemixConfig): esbuild.Plugin {
       });
 
       build.onLoad({ filter: suffixMatcher }, async args => {
-        let { json } = await processCss(config, args.path, "server");
+        let { json } = await processCss(config, args.path);
         return {
           contents: JSON.stringify(json),
           loader: "json"
@@ -53,11 +53,7 @@ export function cssModulesClientPlugin(config: RemixConfig): esbuild.Plugin {
 
       build.onLoad({ filter: suffixMatcher }, async args => {
         try {
-          let { json, hash, result } = await processCss(
-            config,
-            args.path,
-            "client"
-          );
+          let { json, hash, result } = await processCss(config, args.path);
           let outDir = path.resolve(config.assetsBuildDirectory, "_assets");
           let assetName =
             path.basename(args.path).replace(suffixMatcher, "") +
@@ -85,8 +81,7 @@ let cssPromiseCache = new Map<string, Promise<any>>();
 
 async function processCss(
   config: RemixConfig,
-  filePath: string,
-  where: "server" | "client"
+  filePath: string
 ): Promise<CachedCSSResult> {
   // We are creating our own file hash since we're not relying on ESBuild to
   // write the file. I'm not sure what hashing algorithm they use but this
