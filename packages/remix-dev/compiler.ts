@@ -1,4 +1,4 @@
-import * as fse from "fs-extra";
+import { promises as fsp } from "fs";
 import * as path from "path";
 import { builtinModules as nodeBuiltins } from "module";
 import * as esbuild from "esbuild";
@@ -619,7 +619,7 @@ function serverRouteModulesPlugin(config: RemixConfig): esbuild.Plugin {
 
       build.onLoad({ filter: /.*/, namespace: "route-module" }, async args => {
         let file = args.path;
-        let contents = await fse.readFile(file, "utf-8");
+        let contents = await fsp.readFile(file, "utf-8");
 
         // Default to `export {}` if the file is empty so esbuild interprets
         // this file as ESM instead of CommonJS with `default: {}`. This helps
