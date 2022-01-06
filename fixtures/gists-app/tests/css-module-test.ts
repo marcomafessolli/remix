@@ -7,7 +7,7 @@
 
 export {};
 
-describe("CSS module import", () => {
+describe.only("CSS module import", () => {
   //   let browser: Browser;
   //   let page: Page;
   //   beforeEach(async () => {
