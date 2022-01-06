@@ -16,7 +16,10 @@ import { loaders, getLoaderForFile } from "./compiler/loaders";
 import { mdxPlugin } from "./compiler/plugins/mdx";
 import { getRouteModuleExportsCached } from "./compiler/routes";
 import { writeFileSafe } from "./compiler/utils/fs";
-import { cssModulesServerPlugin } from "./compiler/plugins/css-modules";
+import {
+  cssModulesClientPlugin,
+  cssModulesServerPlugin
+} from "./compiler/plugins/css-modules";
 
 // When we build Remix, this shim file is copied directly into the output
 // directory in the same place relative to this file. It is eventually injected
@@ -326,9 +329,8 @@ async function createBrowserBuild(
       "process.env.NODE_ENV": JSON.stringify(options.mode)
     },
     plugins: [
+      cssModulesClientPlugin(config),
       mdxPlugin(config),
-      // bareCssPlugin(config, /^(?!.*\.module\.css$).*\.css$/),
-      // cssModulesPlugin(config, /\.module\.css?$/),
       browserRouteModulesPlugin(config, /\?browser$/),
       emptyModulesPlugin(config, /\.server(\.[jt]sx?)?$/)
     ]
@@ -368,7 +370,7 @@ async function createServerBuild(
       "process.env.NODE_ENV": JSON.stringify(options.mode)
     },
     plugins: [
-      cssModulesServerPlugin(config, /\.module\.css?$/),
+      cssModulesServerPlugin(config),
       mdxPlugin(config),
       serverRouteModulesPlugin(config),
       emptyModulesPlugin(config, /\.client(\.[jt]sx?)?$/),
