@@ -452,7 +452,7 @@ describe("readConfig", () => {
         "serverMode": "production",
         "serverModuleFormat": "cjs",
         "serverPlatform": "node",
-        "unstable_cssModules": "node",
+        "unstable_cssModules": Any<Boolean>,
       }
     `
     );
