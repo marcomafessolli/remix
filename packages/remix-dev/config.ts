@@ -95,6 +95,13 @@ export interface AppConfig {
    * routes.
    */
   ignoredRouteFiles?: string[];
+
+  /**
+   * Experimental: Adds support for CSS module imports.
+   *
+   * @link https://github.com/css-modules/css-modules
+   */
+  unstable_cssModules: boolean;
 }
 
 /**
@@ -175,6 +182,13 @@ export interface RemixConfig {
    * The platform the server build is targeting. Defaults to "node".
    */
   serverPlatform: "node" | "neutral";
+
+  /**
+   * Experimental: Adds support for CSS module imports.
+   *
+   * @link https://github.com/css-modules/css-modules
+   */
+  unstable_cssModules: boolean;
 }
 
 /**
