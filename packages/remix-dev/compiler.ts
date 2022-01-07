@@ -1,4 +1,4 @@
-import { promises as fsp } from "fs";
+import fse from "fs-extra";
 import * as path from "path";
 import { builtinModules as nodeBuiltins } from "module";
 import * as esbuild from "esbuild";
@@ -20,6 +20,7 @@ import {
   cssModulesClientPlugin,
   cssModulesServerPlugin
 } from "./compiler/plugins/css-modules";
+import { getHash } from "./compiler/utils/crypto";
 
 // When we build Remix, this shim file is copied directly into the output
 // directory in the same place relative to this file. It is eventually injected
@@ -58,7 +59,7 @@ function defaultBuildFailureHandler(failure: Error | esbuild.BuildFailure) {
   console.error(failure?.message || "An unknown build error occurred");
 }
 
-interface BuildOptions extends Partial<BuildConfig> {
+export interface BuildOptions extends Partial<BuildConfig> {
   onWarning?(message: string, key: string): void;
   onBuildFailure?(failure: Error | esbuild.BuildFailure): void;
 }
@@ -249,6 +250,13 @@ async function buildEverything(
   config: RemixConfig,
   options: Required<BuildOptions> & { incremental?: boolean }
 ): Promise<(esbuild.BuildResult | undefined)[]> {
+  let cssModulesContent = "";
+  let cssHashSource = "";
+  function handleProcessedCss(args: { css: string; hash: string }) {
+    cssModulesContent += args.css;
+    cssHashSource += args.hash;
+  }
+
   // TODO:
   // When building for node, we build both the browser and server builds in
   // parallel and emit the asset manifest as a separate file in the output
@@ -258,12 +266,30 @@ async function buildEverything(
   // in a single JavaScript file.
 
   try {
-    let browserBuildPromise = createBrowserBuild(config, options);
+    let browserBuildPromise = createBrowserBuild(
+      config,
+      options,
+      handleProcessedCss
+    );
     let serverBuildPromise = createServerBuild(config, options);
 
     return await Promise.all([
       browserBuildPromise.then(async build => {
-        await generateManifests(config, build.metafile!);
+        let cssModulePromise: Promise<any> | null = null;
+        if (config.unstable_cssModules === true && cssModulesContent) {
+          let filePath = path.resolve(
+            config.assetsBuildDirectory,
+            `__modules.css`
+          );
+          let hash = getHash(cssHashSource).slice(0, 8).toUpperCase();
+          filePath = filePath.replace(/\.css$/, `-${hash}.css`);
+          cssModulePromise = fse.writeFile(filePath, cssModulesContent);
+        }
+
+        await Promise.all([
+          cssModulePromise,
+          generateManifests(config, build.metafile!)
+        ]);
         return build;
       }),
       serverBuildPromise
@@ -276,7 +302,8 @@ async function buildEverything(
 
 async function createBrowserBuild(
   config: RemixConfig,
-  options: BuildOptions & { incremental?: boolean }
+  options: BuildOptions & { incremental?: boolean },
+  handleProcessedCss: (args: { css: string; hash: string }) => void
 ): Promise<esbuild.BuildResult> {
   // For the browser build, exclude node built-ins that don't have a
   // browser-safe alternative installed in node_modules. Nothing should
@@ -300,7 +327,7 @@ async function createBrowserBuild(
   };
   for (let id of Object.keys(config.routes)) {
     // All route entry points are virtual modules that will be loaded by the
-    // browserEntryPointsPlugin. This allows us to tree-shake server-only code
+    // browserRouteModulesPlugin. This allows us to tree-shake server-only code
     // that we don't want to run in the browser (i.e. action & loader).
     entryPoints[id] =
       path.resolve(config.appDirectory, config.routes[id].file) + "?browser";
@@ -329,7 +356,7 @@ async function createBrowserBuild(
       "process.env.NODE_ENV": JSON.stringify(options.mode)
     },
     plugins: [
-      cssModulesClientPlugin(config),
+      cssModulesClientPlugin(config, handleProcessedCss),
       mdxPlugin(config),
       browserRouteModulesPlugin(config, /\?browser$/),
       emptyModulesPlugin(config, /\.server(\.[jt]sx?)?$/)
@@ -404,6 +431,7 @@ async function createServerBuild(
           // Include "remix" in the build so the server runtime (node) doesn't
           // have to try to find the magic exports at runtime. This essentially
           // translates all `import x from "remix"` statements into `import x
+
           // from "@remix-run/x"` in the build.
           if (packageName === "remix") return false;
 
@@ -619,7 +647,7 @@ function serverRouteModulesPlugin(config: RemixConfig): esbuild.Plugin {
 
       build.onLoad({ filter: /.*/, namespace: "route-module" }, async args => {
         let file = args.path;
-        let contents = await fsp.readFile(file, "utf-8");
+        let contents = await fse.readFile(file, "utf-8");
 
         // Default to `export {}` if the file is empty so esbuild interprets
         // this file as ESM instead of CommonJS with `default: {}`. This helps

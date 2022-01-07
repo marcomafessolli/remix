@@ -97,11 +97,12 @@ export interface AppConfig {
   ignoredRouteFiles?: string[];
 
   /**
-   * Experimental: Adds support for CSS module imports.
+   * Adds experimental support for CSS module imports.
    *
-   * @link https://github.com/css-modules/css-modules
+   * **Warning:** The API and implementation of experimental features may change
+   * between minor and patch versions.
    */
-  unstable_cssModules: boolean;
+  unstable_cssModules?: boolean;
 }
 
 /**
@@ -184,9 +185,7 @@ export interface RemixConfig {
   serverPlatform: "node" | "neutral";
 
   /**
-   * Experimental: Adds support for CSS module imports.
-   *
-   * @link https://github.com/css-modules/css-modules
+   * Adds support for CSS module imports.
    */
   unstable_cssModules: boolean;
 }
@@ -284,6 +283,8 @@ export async function readConfig(
     }
   }
 
+  let unstable_cssModules = appConfig.unstable_cssModules || false;
+
   return {
     appDirectory,
     cacheDirectory,
@@ -299,7 +300,8 @@ export async function readConfig(
     serverMode,
     serverModuleFormat,
     serverPlatform,
-    mdx
+    mdx,
+    unstable_cssModules
   };
 }
 

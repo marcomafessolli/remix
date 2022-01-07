@@ -43,5 +43,7 @@ module.exports = {
         route(":messageId", "pages/child.jsx");
       });
     });
-  }
+  },
+
+  unstable_cssModules: true
 };

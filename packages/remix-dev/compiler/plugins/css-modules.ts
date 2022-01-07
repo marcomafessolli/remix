@@ -10,11 +10,11 @@ import * as cache from "../../cache";
 import type { RemixConfig } from "../../config";
 
 type CSSModuleClassMap = { [key: string]: string };
-type CachedCSSResult = {
+interface CachedCSSResult {
   hash: string;
   result: PostCSSResult;
   json: CSSModuleClassMap;
-};
+}
 
 const suffixMatcher = /\.module\.css?$/;
 
@@ -30,39 +30,55 @@ export function cssModulesServerPlugin(config: RemixConfig): esbuild.Plugin {
       });
 
       build.onLoad({ filter: suffixMatcher }, async args => {
-        let { json } = await processCss(config, args.path);
-        return {
-          contents: JSON.stringify(json),
-          loader: "json"
-        };
+        try {
+          if (config.unstable_cssModules !== true) {
+            throw Error(
+              "CSS Module imports are an experimental feature and not supported by " +
+                "default. To enable support for CSS Modules, set `unstable_cssModules` " +
+                "to `true` in `remix.config.js`."
+            );
+          }
+          let { json } = await processCss(config, args.path);
+          return {
+            contents: JSON.stringify(json),
+            loader: "json"
+          };
+        } catch (err: any) {
+          return {
+            errors: [{ text: err.message }]
+          };
+        }
       });
     }
   };
 }
 
-export function cssModulesClientPlugin(config: RemixConfig): esbuild.Plugin {
+export function cssModulesClientPlugin(
+  config: RemixConfig,
+  handleProcessedCss: (args: { css: string; hash: string }) => void
+): esbuild.Plugin {
   return {
     name: "css-modules-imports-client",
     async setup(build) {
       build.onResolve({ filter: suffixMatcher }, args => {
         return {
           path: getResolvedFilePath(config, args),
-          namespace: "css-modules-import-client"
+          namespace: "css-modules-import-client",
+          sideEffects: false
         };
       });
 
       build.onLoad({ filter: suffixMatcher }, async args => {
         try {
-          let { json, hash, result } = await processCss(config, args.path);
-          let outDir = path.resolve(config.assetsBuildDirectory, "_assets");
-          let assetName =
-            path.basename(args.path).replace(suffixMatcher, "") +
-            `-${hash}.css`;
-          let assetPath = path.join(outDir, assetName);
-
-          await fse.ensureDir(outDir);
-          await fse.writeFile(assetPath, result.css, { encoding: "utf-8" });
-
+          if (config.unstable_cssModules !== true) {
+            throw Error(
+              "CSS Module imports are an experimental feature and not supported by " +
+                "default. To enable support for CSS Modules, set `unstable_cssModules` " +
+                "to `true` in `remix.config.js`."
+            );
+          }
+          let { json, result, hash } = await processCss(config, args.path);
+          handleProcessedCss({ css: result.css, hash });
           return {
             contents: JSON.stringify(json),
             loader: "json"
@@ -83,17 +99,12 @@ async function processCss(
   config: RemixConfig,
   filePath: string
 ): Promise<CachedCSSResult> {
-  // We are creating our own file hash since we're not relying on ESBuild to
-  // write the file. I'm not sure what hashing algorithm they use but this
-  // formats the filename in alignment with other assets. We can remove the
-  // string manipulation and just use the full hash if it isn't important.
   let hash = (await getFileHash(filePath)).slice(0, 8).toUpperCase();
-
   if (cssPromiseCache.has(hash)) {
     return cssPromiseCache.get(hash);
   }
 
-  let newPromise = (async function () {
+  let cssPromise = (async function () {
     let cached: CachedCSSResult | null = null;
     let key = getCacheKey(config, filePath);
     let json: CSSModuleClassMap = {};
@@ -122,8 +133,8 @@ async function processCss(
     }
     return cached;
   })();
-  cssPromiseCache.set(hash, newPromise);
-  return newPromise;
+  cssPromiseCache.set(hash, cssPromise);
+  return cssPromise;
 }
 
 function getCacheKey(config: RemixConfig, filePath: string) {
